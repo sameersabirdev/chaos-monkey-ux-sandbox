@@ -3,11 +3,11 @@
   "description": "Adversarially break a freshly built frontend, then generate the error boundaries it lacked.",
   "version": "1.0.0",
   "author": {
-    "name": "sabirsameer48",
-    "url": "https://github.com/sabirsameer48"
+    "name": "sameersabirdev",
+    "url": "https://github.com/sameersabirdev"
   },
-  "homepage": "https://github.com/sabirsameer48/chaos-monkey-ux-sandbox",
-  "repository": "https://github.com/sabirsameer48/chaos-monkey-ux-sandbox",
+  "homepage": "https://github.com/sameersabirdev/chaos-monkey-ux-sandbox",
+  "repository": "https://github.com/sameersabirdev/chaos-monkey-ux-sandbox",
   "license": "MIT",
   "keywords": [
     "claude-code",

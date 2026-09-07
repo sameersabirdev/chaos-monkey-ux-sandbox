@@ -49,14 +49,14 @@ that maps to working code in `references/remediation.md` and drop-in components 
 ### Claude Code (plugin — recommended)
 
 ```bash
-/plugin marketplace add sabirsameer48/chaos-monkey-ux-sandbox
+/plugin marketplace add sameersabirdev/chaos-monkey-ux-sandbox
 /plugin install chaos-monkey-ux-sandbox@chaos-monkey-ux-sandbox
 ```
 
 ### Claude Code (manual)
 
 ```bash
-git clone https://github.com/sabirsameer48/chaos-monkey-ux-sandbox.git
+git clone https://github.com/sameersabirdev/chaos-monkey-ux-sandbox.git
 cd chaos-monkey-ux-sandbox
 ./install.sh            # or: powershell -ExecutionPolicy Bypass -File install.ps1
 ```
@@ -67,7 +67,7 @@ to install into that project's `.claude/skills/` instead.
 ### Codex / Cursor / Windsurf / other agents
 
 ```bash
-git clone https://github.com/sabirsameer48/chaos-monkey-ux-sandbox.git .agent-skills/chaos
+git clone https://github.com/sameersabirdev/chaos-monkey-ux-sandbox.git .agent-skills/chaos
 ```
 
 Then add to your `AGENTS.md` / `.cursorrules` / system prompt:
@@ -189,7 +189,7 @@ The headline test runs the same attacks against two bundled fixtures:
   it explicitly.
 - Detectors are instrumented before app code, so failures the app swallows are still seen.
 
-Pairs well with [vitals-precognitive-builder](https://github.com/sabirsameer48/vitals-precognitive-builder),
+Pairs well with [vitals-precognitive-builder](https://github.com/sameersabirdev/vitals-precognitive-builder),
 which builds what this breaks.
 
 ## License
