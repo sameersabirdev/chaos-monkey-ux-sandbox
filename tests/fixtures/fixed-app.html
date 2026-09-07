@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hardened Dashboard (chaos fixture)</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 0; padding: 24px; }
+    .row { padding: 8px; border-bottom: 1px solid #eee; overflow-wrap: anywhere; }
+    .skeleton { height: 40px; background: #eee; margin: 8px 0; }
+    button { padding: 8px 16px; min-height: 32px; }
+    input { padding: 8px; max-width: 100%; box-sizing: border-box; min-height: 32px; }
+    #status { min-height: 24px; }
+  </style>
+</head>
+<body>
+  <h1>Revenue</h1>
+
+  <!-- The same app as broken-app.html, with every remedy from
+       references/remediation.md applied. Chaos should find nothing blocking. -->
+
+  <div id="skeleton" class="skeleton" aria-busy="true"></div>
+  <div id="status" role="alert" hidden></div>
+  <div id="list"></div>
+
+  <form id="form">
+    <input id="name" type="text" placeholder="Search name" maxlength="200">
+    <button type="submit" id="submit">Save</button>
+  </form>
+
+  <script>
+    var MAX_ROWS = 200;          // payload-guard: never render an unbounded list
+    var TIMEOUT_MS = 8000;       // timeout-guard
+    var latest = 0;              // race-guard: only the newest request may write
+    var pending = false;         // race-guard: no double submit
+
+    function setStatus(message) {
+      var el = document.getElementById('status');
+      el.textContent = message;
+      el.hidden = !message;
+    }
+
+    function finishLoading() {
+      // Always clears, on every path — success, empty, error, timeout.
+      var sk = document.getElementById('skeleton');
+      if (sk) sk.remove();
+    }
+
+    function toText(v) {
+      if (v === null || v === undefined) return '—';
+      if (typeof v === 'number') return Number.isFinite(v) ? String(v) : '—';
+      return String(v);
+    }
+
+    function render(rows) {
+      var list = document.getElementById('list');
+      list.textContent = '';
+      // input-guard: textContent, never innerHTML, for API-controlled strings
+      rows.slice(0, MAX_ROWS).forEach(function (r) {
+        var div = document.createElement('div');
+        div.className = 'row';
+        div.textContent = toText(r && r.name) + ' — ' + toText(r && r.value);
+        list.appendChild(div);
+      });
+    }
+
+    async function load() {
+      var id = ++latest;
+      var ac = new AbortController();
+      var timer = setTimeout(function () { ac.abort('timeout'); }, TIMEOUT_MS);
+
+      try {
+        var res = await fetch('/api/data', { signal: ac.signal });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+
+        var json = await res.json();                       // may throw on malformed JSON
+        if (id !== latest) return;                         // superseded by a newer request
+
+        var rows = json && Array.isArray(json.data) ? json.data : [];
+        finishLoading();
+
+        if (!rows.length) {
+          // empty-state: distinct from an error, and it says so
+          setStatus('No data yet. Records will appear here once they exist.');
+          render([]);
+          return;
+        }
+
+        setStatus('');
+        render(rows);
+      } catch (err) {
+        if (id !== latest) return;
+        finishLoading();                                   // never leave the skeleton up
+        var timedOut = ac.signal.aborted;
+        setStatus(timedOut
+          ? 'This is taking longer than usual. Please try again.'
+          : 'We could not load this data. Your data is safe — try again.');
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+
+    document.getElementById('form').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      if (pending) return;                                 // guard the handler, not just the button
+      pending = true;
+      var btn = document.getElementById('submit');
+      btn.disabled = true;
+      btn.setAttribute('aria-busy', 'true');
+      try {
+        var res = await fetch('/api/save', { method: 'POST', body: '{}' });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        setStatus('Saved.');
+      } catch (err) {
+        setStatus('Could not save. Your input has been kept — try again.');
+        // Input is deliberately NOT cleared on failure.
+      } finally {
+        pending = false;
+        btn.disabled = false;
+        btn.removeAttribute('aria-busy');
+      }
+    });
+
+    window.addEventListener('unhandledrejection', function (e) {
+      e.preventDefault();
+      finishLoading();
+      setStatus('Something went wrong. Please try again.');
+    });
+
+    load();
+  </script>
+</body>
+</html>

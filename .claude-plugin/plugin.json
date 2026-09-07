@@ -1,0 +1,22 @@
+{
+  "name": "chaos-monkey-ux-sandbox",
+  "description": "Adversarially break a freshly built frontend, then generate the error boundaries it lacked.",
+  "version": "1.0.0",
+  "author": {
+    "name": "sabirsameer48",
+    "url": "https://github.com/sabirsameer48"
+  },
+  "homepage": "https://github.com/sabirsameer48/chaos-monkey-ux-sandbox",
+  "repository": "https://github.com/sabirsameer48/chaos-monkey-ux-sandbox",
+  "license": "MIT",
+  "keywords": [
+    "claude-code",
+    "agent-skill",
+    "playwright",
+    "chaos-engineering",
+    "error-boundary",
+    "react",
+    "testing",
+    "resilience"
+  ]
+}

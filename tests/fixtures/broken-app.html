@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Broken Dashboard (chaos fixture)</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 0; padding: 24px; }
+    .row { padding: 8px; border-bottom: 1px solid #eee; white-space: nowrap; }
+    .skeleton { height: 40px; background: #eee; margin: 8px 0; }
+    button { padding: 8px 16px; }
+    input { padding: 8px; width: 300px; }
+  </style>
+</head>
+<body>
+  <h1>Revenue</h1>
+
+  <!-- Deliberate defects, one per chaos attack:
+       1. no res.ok check       -> api-failure crashes on .json()
+       2. skeleton never hidden -> stuck loading state on any failure
+       3. innerHTML from API    -> payload XSS
+       4. no submit guard       -> race double-submit
+       5. no maxLength          -> input overflow
+       6. white-space: nowrap   -> viewport horizontal overflow
+       7. no empty state        -> silent on []
+  -->
+
+  <div id="skeleton" class="skeleton" aria-busy="true"></div>
+  <div id="list"></div>
+
+  <form id="form">
+    <input id="name" type="text" placeholder="Search name">
+    <button type="submit" id="submit">Save</button>
+  </form>
+
+  <script>
+    let saves = 0;
+
+    async function load() {
+      // DEFECT: no res.ok check, no try/catch, no timeout
+      const res = await fetch('/api/data');
+      const json = await res.json();
+      const rows = json.data;
+
+      // DEFECT: skeleton is only removed on the happy path
+      document.getElementById('skeleton').remove();
+
+      // DEFECT: innerHTML with API-controlled strings
+      document.getElementById('list').innerHTML = rows
+        .map(function (r) { return '<div class="row">' + r.name + ' — ' + r.value + '</div>'; })
+        .join('');
+    }
+
+    document.getElementById('form').addEventListener('submit', async function (e) {
+      e.preventDefault();
+      // DEFECT: no pending guard — fires on every click
+      saves++;
+      await fetch('/api/save', { method: 'POST', body: JSON.stringify({ n: saves }) });
+    });
+
+    load();
+  </script>
+</body>
+</html>

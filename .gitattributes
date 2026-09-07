@@ -1,0 +1,19 @@
+# Normalize to LF in the repository. install.sh and the .mjs scripts must have LF
+# line endings or they break on Linux/macOS ("bad interpreter: no such file").
+* text=auto eol=lf
+
+*.sh   text eol=lf
+*.mjs  text eol=lf
+*.js   text eol=lf
+*.ts   text eol=lf
+*.tsx  text eol=lf
+*.md   text eol=lf
+*.json text eol=lf
+*.yml  text eol=lf
+
+# PowerShell prefers CRLF.
+*.ps1  text eol=crlf
+
+*.png binary
+*.jpg binary
+*.webp binary

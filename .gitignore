@@ -1,0 +1,13 @@
+node_modules/
+.chaos/
+.next/
+dist/
+build/
+coverage/
+*.log
+.DS_Store
+Thumbs.db
+.env
+.env.*
+test-results/
+playwright-report/
