@@ -68,6 +68,7 @@ Runs the full suite. Useful flags:
 | `--intensity light\|normal\|brutal` | payload sizes and click rates |
 | `--headed` | watch it happen |
 | `--json` | machine-readable output only |
+| `--project-root <path>` | where to resolve Playwright from, when the skill is installed outside the project |
 
 Attacks (`references/attack-catalog.md` documents each):
 
@@ -161,6 +162,7 @@ node scripts/chaos.mjs --url <url> --emit-test tests/chaos.spec.ts
 - `references/attack-catalog.md` — every attack, what it simulates, what it catches
 - `references/remediation.md` — finding → fix, with code
 - `scripts/chaos.mjs` — orchestrator | `scripts/detectors.mjs` — instrumentation
+- `scripts/load-playwright.mjs` — finds Playwright in the project under test
 - `scripts/attacks/*.mjs` — one module per attack
 - `scripts/scaffold.mjs` — writes the remediation components into the project
 - `assets/templates/` — `ErrorBoundary.tsx`, `QueryErrorBoundary.tsx`, `EmptyState.tsx`, `useAsyncGuard.ts`, `useOnlineStatus.ts`
