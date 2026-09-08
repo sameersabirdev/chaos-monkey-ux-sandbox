@@ -106,12 +106,26 @@ const INSPECT = () => {
   const overlay = overlaySelectors.map((s) => document.querySelector(s)).find(Boolean);
   const overlayText = overlay ? (overlay.innerText || overlay.textContent || '').slice(0, 300) : null;
 
-  const LOADING = [
+  // Unambiguous loading signals — an author opted in to saying "busy".
+  const LOADING_EXPLICIT = [
     '[aria-busy="true"]', '[role="progressbar"]', '[data-loading="true"]',
-    '[class*="skeleton" i]', '[class*="spinner" i]', '[class*="animate-pulse" i]',
     '[data-testid*="loading" i]', '[data-testid*="skeleton" i]',
   ].join(',');
-  const loaders = q(LOADING).filter(visible);
+  // Class-name guesses. Marketing sites use `animate-pulse` for decorative glows and
+  // `spinner` for logos, so these only count when the element is shaped like a skeleton.
+  const LOADING_HEURISTIC = ['[class*="skeleton" i]', '[class*="spinner" i]', '[class*="animate-pulse" i]'].join(',');
+
+  const skeletonShaped = (el) => {
+    if (el.tagName === 'SVG' || el.tagName === 'IMG' || el.closest('svg')) return false;  // icons/glows
+    const r = el.getBoundingClientRect();
+    if (r.width < 32 || r.height < 8) return false;                                       // too small to be content
+    return el.textContent.trim().length === 0;                                            // a skeleton holds no text
+  };
+
+  const loaders = [
+    ...q(LOADING_EXPLICIT).filter(visible),
+    ...q(LOADING_HEURISTIC).filter((el) => visible(el) && skeletonShaped(el)),
+  ].filter((el, i, arr) => arr.indexOf(el) === i);
 
   const ERROR_UI = ['[role="alert"]', '[data-error]', '[class*="error" i]', '[data-testid*="error" i]', '[aria-invalid="true"]'].join(',');
   const errorUi = q(ERROR_UI).filter(visible);
@@ -226,9 +240,14 @@ export function assess(snap, opts = {}) {
   }
 
   // ---- stuck ----
-  if (snap.loaderCount > 0) {
+  // A loader that is ALSO present on the healthy baseline is decorative (a pulsing
+  // glow, an animated logo) — only a loader this attack introduced means "stuck".
+  const persistentLoaders = baseline?.loaderCount ?? 0;
+  if (snap.loaderCount > persistentLoaders) {
     push('stuck', 'timeout-guard', 'Loading state never resolved',
-      `${snap.loaderCount} loader(s) still visible after settle: ${snap.loaderSample.join(', ')}`);
+      `${snap.loaderCount} loader(s) still visible after settle`
+      + (persistentLoaders ? ` (${persistentLoaders} also present at baseline, ignored)` : '')
+      + `: ${snap.loaderSample.join(', ')}`);
   }
 
   // ---- silent ----

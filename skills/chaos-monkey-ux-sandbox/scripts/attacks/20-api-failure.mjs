@@ -40,7 +40,9 @@ export default {
   async run(ctx) {
     const { page } = ctx;
 
+    let n = 0;
     for (const s of SCENARIOS) {
+      ctx.progress(`serving ${s.step}  (${++n}/${SCENARIOS.length})`);
       await page.unrouteAll?.({ behavior: 'ignoreErrors' }).catch(() => {});
       await page.route('**/*', async (route) => {
         if (!isDataRequest(route)) return route.continue();

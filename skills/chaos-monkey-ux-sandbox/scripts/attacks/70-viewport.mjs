@@ -22,7 +22,9 @@ export default {
   async run(ctx) {
     const { page } = ctx;
 
+    let n = 0;
     for (const v of VIEWPORTS) {
+      ctx.progress(`resizing to ${v.width}x${v.height}  (${++n}/${VIEWPORTS.length})`);
       await page.setViewportSize({ width: v.width, height: v.height });
       await page.goto(ctx.url, { waitUntil: 'domcontentloaded', timeout: ctx.timeout }).catch(() => {});
       await ctx.settle(1000);

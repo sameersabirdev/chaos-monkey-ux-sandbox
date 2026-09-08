@@ -62,6 +62,9 @@ const AS_JSON = flag('--json');
 const COMPARE = arg('--compare');
 const EMIT_TEST = arg('--emit-test');
 const TIMEOUT = +arg('--timeout', '45000');
+// How long to wait for networkidle before giving up on it. Sites with analytics or
+// polling never go idle, so a long value here is pure dead time on every step.
+const IDLE_TIMEOUT = +arg('--idle-timeout', '3000');
 
 // Resolve Playwright from the project under test — the skill usually lives elsewhere.
 const PROJECT_ROOT = arg('--project-root', process.cwd());
@@ -75,7 +78,11 @@ if (!selected.length) { console.error(`chaos: no attacks matched (--list to see 
 fs.mkdirSync(OUT, { recursive: true });
 fs.mkdirSync(path.join(OUT, 'screenshots'), { recursive: true });
 
+const T0 = Date.now();
+const elapsed = () => ((Date.now() - T0) / 1000).toFixed(1).padStart(6);
 const log = (msg) => { if (!AS_JSON) console.log(msg); };
+/** Timestamped progress line. Long runs must never look hung. */
+const step = (msg) => { if (!AS_JSON) console.log(`  [${elapsed()}s] ${msg}`); };
 const findings = [];
 let baseline = null;
 
@@ -106,15 +113,23 @@ const watchPage = (p) => {
 let closingDown = false;
 watchPage(page);
 
-/** A killed tab IS a finding — record it, then hand back a live page. */
+/** A killed tab IS a finding — record it once per attack, then hand back a live page. */
+const crashedAttacks = new Set();
 async function revivePage(attackId, stepId) {
   if (page && !page.isClosed()) return false;
-  findings.push({
-    attack: attackId, step: stepId, severity: 'crash', remedy: 'payload-guard',
-    title: 'Browser tab was killed',
-    evidence: 'The renderer process died (out of memory, or an unbounded render). Everything after this point ran on a fresh tab.',
-  });
-  log('      crash  browser tab killed - restarting page');
+  // One renderer death cascades: the step that killed it, the aborted module, and the
+  // post-attack check all see a dead tab. Report the root event, not its echoes.
+  if (crashedAttacks.has(attackId)) {
+    log('      (tab still dead - restarting page, already reported)');
+  } else {
+    crashedAttacks.add(attackId);
+    findings.push({
+      attack: attackId, step: stepId, severity: 'crash', remedy: 'payload-guard',
+      title: 'Browser tab was killed',
+      evidence: 'The renderer process died (out of memory, or an unbounded render). Everything after this point in the attack ran on a fresh tab.',
+    });
+    log('      crash  browser tab killed - restarting page');
+  }
   try { page = await context.newPage(); await installProbe(page); watchPage(page); ctx.page = page; }
   catch { /* context itself is gone; the loop below will stop */ }
   pageCrashed = false;
@@ -137,10 +152,16 @@ const ctx = {
     await resetProbe(page);
   },
 
-  /** Wait for the app to stop working, bounded. */
+  /**
+   * Wait for the app to stop working, bounded.
+   *
+   * networkidle is best-effort: sites with analytics beacons, polling, or open
+   * websockets never reach it, so this timeout is paid in full on every step.
+   * Keep it short — the fixed wait below is what actually lets the UI settle.
+   */
   async settle(ms = 1200) {
     if (this.dead) return;
-    await page.waitForLoadState('networkidle', { timeout: 8000 }).catch(() => {});
+    await page.waitForLoadState('networkidle', { timeout: IDLE_TIMEOUT }).catch(() => {});
     await page.waitForTimeout(ms).catch(() => {});
   },
 
@@ -152,21 +173,27 @@ const ctx = {
     log(`      ${severity}  ${title}`);
   },
 
+  /** Announce what is about to happen, so a slow step never looks like a hang. */
+  progress(msg) { step(`    ${msg}`); },
+
   /** Record findings for one step. */
-  async check(attack, step, opts = {}) {
+  async check(attack, stepName, opts = {}) {
+    const startedAt = Date.now();
     if (this.dead) {
-      await revivePage(attack, step);
+      await revivePage(attack, stepName);
       return { snap: {}, results: [] };
     }
     const snap = await inspect(page);
-    const results = assess(snap, { attack, step, baseline, ...opts });
+    const results = assess(snap, { attack, step: stepName, baseline, ...opts });
     if (results.length) {
-      const shot = path.join(OUT, 'screenshots', `${attack}-${step.replace(/[^a-z0-9]+/gi, '-')}.png`.toLowerCase());
+      const shot = path.join(OUT, 'screenshots', `${attack}-${stepName.replace(/[^a-z0-9]+/gi, '-')}.png`.toLowerCase());
       await page.screenshot({ path: shot, fullPage: false }).catch(() => {});
       results.forEach((r) => { r.screenshot = path.relative(OUT, shot); });
     }
     findings.push(...results);
-    log(`      ${results.length ? results.map((r) => r.severity).join(',') : 'ok'}  ${step}`);
+    const verdict = results.length ? results.map((r) => r.severity).join(',') : 'ok';
+    const took = ((Date.now() - startedAt) / 1000).toFixed(1);
+    step(`    ${verdict === 'ok' ? 'ok  ' : verdict.toUpperCase()}  ${stepName}  (${took}s)`);
     return { snap, results };
   },
 
@@ -209,8 +236,14 @@ if (baseline.overlayText || baseline.rootChildren === 0) {
   log('  ! baseline is already broken — findings below may be noise. Fix the happy path first.');
 }
 
+const timings = [];
+let attackIndex = 0;
+
 for (const attack of selected) {
-  log(`\n  [${attack.id}] ${attack.description}`);
+  attackIndex++;
+  const attackStart = Date.now();
+  log('');
+  step(`[${attackIndex}/${selected.length}] ${attack.id} — ${attack.description}`);
   const before = findings.length;
   try {
     await attack.run(ctx);
@@ -228,7 +261,9 @@ for (const attack of selected) {
     }
   }
   await revivePage(attack.id, 'post-attack');
-  log(`      -> ${findings.length - before} finding(s)`);
+  const attackSecs = (Date.now() - attackStart) / 1000;
+  timings.push({ attack: attack.id, seconds: +attackSecs.toFixed(1), findings: findings.length - before });
+  step(`  done: ${findings.length - before} finding(s) in ${attackSecs.toFixed(1)}s`);
   try { await ctx.reload(); } catch { await revivePage(attack.id, 'post-attack-reload'); }
 }
 
@@ -261,6 +296,7 @@ if (COMPARE) {
 const report = {
   url: URL_, intensity: INTENSITY, ranAt: new Date().toISOString(), durationMs,
   attacks: selected.map((a) => a.id),
+  timings,
   baseline: { interactive: baseline.interactive, domNodes: baseline.domNodes, bodyTextLength: baseline.bodyTextLength },
   counts, blocking, findings, comparison,
 };
@@ -282,6 +318,10 @@ if (AS_JSON) {
 
 console.log(`\n  ${'-'.repeat(68)}`);
 console.log(`  RESULTS  ${findings.length} finding(s) in ${(durationMs / 1000).toFixed(1)}s`);
+if (timings.length > 1) {
+  const slowest = [...timings].sort((a, b) => b.seconds - a.seconds);
+  console.log(`  time by attack: ${slowest.map((t) => `${t.attack} ${t.seconds}s`).join('  ')}`);
+}
 for (const sev of ['crash', 'stuck', 'silent', 'degraded', 'note']) {
   if (counts[sev]) console.log(`    ${sev.padEnd(9)} ${counts[sev]}`);
 }
